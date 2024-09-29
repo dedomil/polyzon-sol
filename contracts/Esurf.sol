@@ -8,7 +8,7 @@ contract Esurf {
         string name;
         string delivery_address;
         uint256[] product_ids;
-        uint256[] purchase_history;
+        uint256[] order_ids;
     }
 
     struct Review {
@@ -25,6 +25,21 @@ contract Esurf {
         Food
     }
 
+    enum OrderStatus {
+        Shipped,
+        OutForDelivery,
+        Delivered,
+        Cancelled
+    }
+
+    struct Order {
+        uint256 order_id;
+        uint256 product_id;
+        OrderStatus status;
+        uint256 quantity;
+        uint256 timestamp;
+    }
+
     struct Product {
         uint256 id;
         string name;
@@ -39,8 +54,10 @@ contract Esurf {
     mapping(address => User) public users;
     mapping(uint256 => Product) public products;
     mapping(uint256 => Review[]) public productReviews;
+    mapping(uint256 => Order) public orders;
 
     uint256 public productCount;
+    uint256 public orderCount;
 
     function createOrEditUserProfile(
         string memory _name,
@@ -50,7 +67,7 @@ contract Esurf {
             name: _name,
             delivery_address: _delivery_address,
             product_ids: new uint256[](0),
-            purchase_history: new uint256[](0)
+            order_ids: new uint256[](0)
         });
     }
 
@@ -79,6 +96,8 @@ contract Esurf {
             image: _image
         });
 
+        users[msg.sender].product_ids.push(productCount);
+
         return productCount;
     }
 
@@ -88,6 +107,16 @@ contract Esurf {
             allProducts[i - 1] = products[i];
         }
         return allProducts;
+    }
+
+    function getProduct(
+        uint256 _productId
+    ) public view returns (Product memory) {
+        require(
+            _productId > 0 && _productId <= productCount,
+            "invalid product"
+        );
+        return products[_productId];
     }
 
     function addReview(uint256 _productId, string memory _text) public {
@@ -116,7 +145,17 @@ contract Esurf {
 
         product.stock -= _quantity;
 
-        users[msg.sender].purchase_history.push(_productId);
+        orderCount++;
+        Order memory newOrder = Order({
+            order_id: orderCount,
+            product_id: _productId,
+            status: OrderStatus.Shipped,
+            quantity: _quantity,
+            timestamp: block.timestamp
+        });
+
+        orders[orderCount] = newOrder;
+        users[msg.sender].order_ids.push(orderCount);
 
         payable(product.seller).transfer(product.price * _quantity);
 
@@ -125,19 +164,32 @@ contract Esurf {
                 msg.value - (product.price * _quantity)
             );
         }
-
-        // emit ProductPurchased(
-        //     msg.sender,
-        //     _productId,
-        //     _quantity,
-        //     product.price * _quantity
-        // );
     }
 
-    // event ProductPurchased(
-    //     address buyer,
-    //     uint256 productId,
-    //     uint256 quantity,
-    //     uint256 totalPrice
-    // );
+    function getOrder(uint256 _orderId) public view returns (Order memory) {
+        require(_orderId > 0 && _orderId <= orderCount, "invalid order");
+        return orders[_orderId];
+    }
+
+    function updateOrderStatus(
+        uint256 _orderId,
+        OrderStatus _newStatus
+    ) public {
+        require(_orderId > 0 && _orderId <= orderCount, "invalid order");
+        Order storage order = orders[_orderId];
+        require(
+            products[order.product_id].seller == msg.sender,
+            "you're not a seller"
+        );
+        order.status = _newStatus;
+    }
+
+    function getUserOrders() public view returns (Order[] memory) {
+        uint256[] memory userOrderIds = users[msg.sender].order_ids;
+        Order[] memory userOrders = new Order[](userOrderIds.length);
+        for (uint256 i = 0; i < userOrderIds.length; i++) {
+            userOrders[i] = orders[userOrderIds[i]];
+        }
+        return userOrders;
+    }
 }

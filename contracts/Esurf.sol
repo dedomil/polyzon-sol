@@ -63,12 +63,19 @@ contract Esurf {
         string memory _name,
         string memory _delivery_address
     ) public {
-        users[msg.sender] = User({
-            name: _name,
-            delivery_address: _delivery_address,
-            product_ids: new uint256[](0),
-            order_ids: new uint256[](0)
-        });
+        User storage user = users[msg.sender];
+
+        if (user.product_ids.length == 0 && user.order_ids.length == 0) {
+            users[msg.sender] = User({
+                name: _name,
+                delivery_address: _delivery_address,
+                product_ids: new uint256[](0),
+                order_ids: new uint256[](0)
+            });
+        } else {
+            user.name = _name;
+            user.delivery_address = _delivery_address;
+        }
     }
 
     function getUserProfile() public view returns (User memory) {
